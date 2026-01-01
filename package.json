@@ -1,34 +1,13 @@
 {
-  "name": "matchmaster-settlement-pro",
-  "private": true,
-  "version": "0.0.0",
+  "name": "football-calculator-backend",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"node server/server.js\" \"vite\"",
-    "build": "vite build",
-    "preview": "vite preview"
+    "start": "node server/server.js"
   },
   "dependencies": {
-    "concurrently": "^9.2.1",
     "cors": "^2.8.5",
-    "date-fns": "^4.1.0",
     "express": "^5.2.1",
-    "html2canvas": "^1.4.1",
-    "lucide-react": "^0.556.0",
-    "modern-screenshot": "^4.6.7",
-    "puppeteer": "^24.34.0",
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1",
-    "tesseract.js": "^6.0.1",
-    "uuid": "^13.0.0",
-    "xlsx-js-style": "^1.2.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "puppeteer": "^24.34.0"
   }
 }
