@@ -4,10 +4,15 @@ import { scrapeOdds } from './services/scraperService.js';
 import { fetchRankings } from './services/rankingService.js';
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', message: 'Backend is running' });
+});
 
 // API: Scrape Odds
 app.post('/api/scrape-odds', async (req, res) => {
