@@ -84,6 +84,20 @@ export const executeScrape = async () => {
     // We will do a quick check for the frame, but mostly we presume readiness.
 
     try {
+        console.log('Waiting 10 seconds for sportsbook frames to fully load...');
+        await new Promise(r => setTimeout(r, 10000));
+
+        console.log('Bypassing potential rules/regulations popups...');
+        await page.evaluate(() => {
+            const btns = Array.from(document.querySelectorAll('a, button, input'));
+            const agree = btns.find(b => {
+                const text = (b.innerText || b.value || '').toLowerCase();
+                return text.includes('i agree') || text.includes('accept') || text === 'ok';
+            });
+            if (agree) agree.click();
+        });
+        await new Promise(r => setTimeout(r, 3000));
+
         console.log('Scanning for match table in frames...');
 
         // Helper to get frame content
