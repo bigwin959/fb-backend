@@ -4,4 +4,5 @@ set -o errexit
 
 npm install
 
-# Rely on npm install's built-in postinstall hook for puppeteer to fetch Chrome
+# Force Puppeteer to download Chrome using explicit JS script
+node node_modules/puppeteer/install.mjs
