@@ -20,7 +20,15 @@ export const launchBrowser = async () => {
         globalBrowser = await puppeteer.launch({
             headless: process.env.NODE_ENV === 'production' ? 'new' : false, // Render uses production
             defaultViewport: null,
-            args: ['--start-maximized', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+            args: [
+                '--start-maximized',
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--no-zygote',
+                '--single-process'
+            ]
         });
 
         globalPage = await globalBrowser.newPage();
