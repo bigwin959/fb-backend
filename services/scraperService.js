@@ -1,4 +1,6 @@
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+puppeteer.use(StealthPlugin());
 import fs from 'fs';
 import path from 'path';
 
@@ -32,6 +34,7 @@ export const launchBrowser = async () => {
         });
 
         globalPage = await globalBrowser.newPage();
+        await globalPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
         console.log('Navigating to Sport368...');
         await globalPage.goto('http://www.sport368.com', {
@@ -43,6 +46,9 @@ export const launchBrowser = async () => {
         if (process.env.SPORT368_USERNAME && process.env.SPORT368_PASSWORD) {
             console.log('Credentials detected. Attempting automated login...');
             try {
+                const currentUrl = await globalPage.url();
+                const currentTitle = await globalPage.title();
+                console.log(`Current URL: ${currentUrl} | Title: ${currentTitle}`);
                 // Give the page plenty of time to load past any splash screens
                 console.log('Waiting for login fields...');
                 await globalPage.waitForSelector('#UserName', { timeout: 45000 }).catch(() => { });
@@ -64,6 +70,8 @@ export const launchBrowser = async () => {
                     return { success: true, message: 'Browser launched and logged in automatically!' };
                 } else {
                     console.log('Could not find standard login fields in the main page. Falling back to manual...');
+                    const debugHtml = await globalPage.content();
+                    console.log(`[DEBUG] Page HTML preview:`, debugHtml.substring(0, 500));
                     return { success: true, message: 'Browser opened. Please log in manually if needed.' };
                 }
             } catch (err) {
@@ -95,16 +103,65 @@ export const executeScrape = async () => {
         console.log('Waiting 10 seconds for sportsbook frames to fully load...');
         await new Promise(r => setTimeout(r, 10000));
 
-        console.log('Bypassing potential rules/regulations popups...');
-        await page.evaluate(() => {
-            const btns = Array.from(document.querySelectorAll('a, button, input'));
-            const agree = btns.find(b => {
-                const text = (b.innerText || b.value || '').toLowerCase();
-                return text.includes('i agree') || text.includes('accept') || text === 'ok';
-            });
-            if (agree) agree.click();
-        });
+        console.log('Closing small pop up posters / announcements across all frames...');
+        for (const frame of [page, ...page.frames()]) {
+            try {
+                await frame.evaluate(() => {
+                    // Try to click standard 'I agree'
+                    const btns = Array.from(document.querySelectorAll('a, button, input'));
+                    const agree = btns.find(b => {
+                        const text = (b.innerText || b.value || '').toLowerCase();
+                        return text === 'i agree' || text === 'accept' || text === 'ok';
+                    });
+                    if (agree) agree.click();
+
+                    // Try to click popup closer (X, Close, 关闭)
+                    const closers = Array.from(document.querySelectorAll('.close, .btn-close, .icon-close, img, span, div, i, a, button'));
+                    for (const c of closers) {
+                        const txt = (c.innerText || '').toLowerCase().trim();
+                        const cls = (c.className || '').toString().toLowerCase();
+                        // Strict check to avoid clicking unrelated 'x' text unless it's a small button
+                        if (['x', 'close', '关闭', 'cancel'].includes(txt) || cls.includes('close') || cls.includes('btn-cancel')) {
+                            const rect = c.getBoundingClientRect();
+                            if (rect.width > 0 && rect.height > 0 && rect.width < 150 && rect.height < 150) {
+                                c.click();
+                            }
+                        }
+                    }
+                });
+            } catch (e) { /* ignore frame cross-origin issues */ }
+        }
         await new Promise(r => setTimeout(r, 3000));
+
+        console.log('Attempting to navigate to Soccer / Football in left menu...');
+        let clickedMenu = false;
+        for (const frame of page.frames()) {
+            try {
+                const clicked = await frame.evaluate(() => {
+                    let clickedSomething = false;
+                    const links = Array.from(document.querySelectorAll('a, span, div, li'));
+                    for (const link of links) {
+                        const txt = (link.innerText || '').trim().toLowerCase();
+                        // Looking for "Soccer", "Football", or "Early" (早盘)
+                        if (txt === 'soccer' || txt === 'football' || txt === '足球' || txt === 'early' || txt === '早盘') {
+                            const rect = link.getBoundingClientRect();
+                            if (rect.width > 0 && rect.height > 0) {
+                                link.click();
+                                clickedSomething = true;
+                                break;
+                            }
+                        }
+                    }
+                    return clickedSomething;
+                });
+                if (clicked) clickedMenu = true;
+            } catch (e) { }
+        }
+
+        if (clickedMenu) {
+            console.log('Navigated menu. Waiting 5s for odds frame to load...');
+            await new Promise(r => setTimeout(r, 5000));
+        }
 
         console.log('Scanning for match table in frames...');
 
@@ -159,6 +216,40 @@ export const executeScrape = async () => {
         }
 
         console.log(`Analyzing best frame: ${bestFrame.url()} (Score: ${maxScore})`);
+
+        console.log('Attempting to Select Leagues automatically...');
+        try {
+            await bestFrame.evaluate(() => {
+                const els = Array.from(document.querySelectorAll('a, button, span, div'));
+                let selectLeagueBtn = els.find(e => {
+                    const txt = (e.innerText || '').trim().toLowerCase();
+                    return txt === 'select league' || txt === 'leagues' || txt === '选择联赛';
+                });
+
+                if (selectLeagueBtn) {
+                    selectLeagueBtn.click();
+                    setTimeout(() => {
+                        const modalEls = Array.from(document.querySelectorAll('a, button, span, div, input, label'));
+                        let allBtn = modalEls.find(e => {
+                            const txt = (e.innerText || '').trim().toLowerCase();
+                            return ['all', 'select all', '全选'].includes(txt);
+                        });
+                        if (allBtn) allBtn.click();
+
+                        setTimeout(() => {
+                            let submitBtn = modalEls.find(e => {
+                                const txt = (e.innerText || '').trim().toLowerCase();
+                                return ['submit', 'go', 'ok', '确定', '确认'].includes(txt);
+                            });
+                            if (submitBtn) submitBtn.click();
+                        }, 500);
+                    }, 1000);
+                }
+            });
+            await new Promise(r => setTimeout(r, 4000)); // wait for league reload
+        } catch (e) {
+            console.log('Select leagues auto-step failed or not found, continuing...');
+        }
 
         console.log('Forcing odds format to Myanmar (MMR)...');
         await bestFrame.evaluate(() => {
