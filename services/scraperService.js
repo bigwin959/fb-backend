@@ -107,31 +107,16 @@ export const executeScrape = async () => {
         for (const frame of [page, ...page.frames()]) {
             try {
                 await frame.evaluate(() => {
-                    // Try to click standard 'I agree'
                     const btns = Array.from(document.querySelectorAll('a, button, input'));
                     const agree = btns.find(b => {
                         const text = (b.innerText || b.value || '').toLowerCase();
-                        return text === 'i agree' || text === 'accept' || text === 'ok';
+                        return text === 'i agree' || text === 'accept' || text === 'ok' || text.includes('i agree');
                     });
-                    if (agree) agree.click();
-
-                    // Try to click popup closer (X, Close, 关闭)
-                    const closers = Array.from(document.querySelectorAll('.close, .btn-close, .icon-close, img, span, div, i, a, button'));
-                    for (const c of closers) {
-                        const txt = (c.innerText || '').toLowerCase().trim();
-                        const cls = (c.className || '').toString().toLowerCase();
-                        // Strict check to avoid clicking unrelated 'x' text unless it's a small button
-                        if (['x', 'close', '关闭', 'cancel'].includes(txt) || cls.includes('close') || cls.includes('btn-cancel')) {
-                            const rect = c.getBoundingClientRect();
-                            if (rect.width > 0 && rect.height > 0 && rect.width < 150 && rect.height < 150) {
-                                c.click();
-                            }
-                        }
-                    }
+                    if (agree) { agree.click(); }
                 });
             } catch (e) { /* ignore frame cross-origin issues */ }
         }
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, 6000));
 
         console.log('Attempting to navigate to Soccer / Football in left menu...');
         let clickedMenu = false;
@@ -142,13 +127,12 @@ export const executeScrape = async () => {
                     const links = Array.from(document.querySelectorAll('a, span, div, li'));
                     for (const link of links) {
                         const txt = (link.innerText || '').trim().toLowerCase();
-                        // Looking for "Soccer", "Football", or "Early" (早盘)
-                        if (txt === 'soccer' || txt === 'football' || txt === '足球' || txt === 'early' || txt === '早盘') {
+                        if (txt === 'soccer' || txt === 'football' || txt === '足球' || txt === 'early') {
                             const rect = link.getBoundingClientRect();
                             if (rect.width > 0 && rect.height > 0) {
                                 link.click();
                                 clickedSomething = true;
-                                break;
+                                // don't break, might need to click multiple nested menus
                             }
                         }
                     }
@@ -159,57 +143,23 @@ export const executeScrape = async () => {
         }
 
         if (clickedMenu) {
-            console.log('Navigated menu. Waiting 5s for odds frame to load...');
-            await new Promise(r => setTimeout(r, 5000));
+            console.log('Navigated menu. Waiting 10s for odds frame to load...');
+            await new Promise(r => setTimeout(r, 10000));
         }
 
         console.log('Scanning for match table in frames...');
 
-        // Helper to get frame content
-        const getFrameContent = async (frame) => {
-            try {
-                return await frame.evaluate(() => {
-                    const text = document.body ? document.body.innerText : '';
-                    return {
-                        url: document.location.href,
-                        textLength: text.length,
-                        preview: text.substring(0, 200).replace(/\n/g, ' '),
-                        hasVs: text.includes('vs'),
-                        hasHDP: text.includes('HDP'),
-                        hasTime: /\d{1,2}:\d{2}/.test(text),
-                        fullText: text
-                    };
-                });
-            } catch (e) { return null; }
-        };
-
+        // Find best frame by looking for specific keywords instead of complex scoring
         let bestFrame = null;
-        let maxScore = 0;
-        let debugLog = '=== FRAME DEBUG LOG ===\n';
-
-        for (const frame of page.frames()) {
-            const content = await getFrameContent(frame);
-            if (!content) continue;
-
-            let score = 0;
-            // Relaxed Scoring
-            if (content.hasVs) score += 10;
-            if (content.hasHDP) score += 10;
-            if (content.hasTime) score += 5;
-            if (content.textLength > 1000) score += 2;
-
-            // Penalties for nav frames
-            if (content.url.includes('left') || content.url.includes('menu')) score -= 20;
-
-            debugLog += `URL: ${content.url}\nScore: ${score}\nLen: ${content.textLength}\nPreview: ${content.preview}\n---\n`;
-
-            if (score > maxScore) {
-                maxScore = score;
-                bestFrame = frame;
-            }
+        for (const f of page.frames()) {
+            try {
+                const txt = await f.evaluate(() => document.body ? document.body.innerText.substring(0, 500) : '');
+                if (txt.includes('Select League') || txt.includes('MMR') || txt.includes('HDP')) {
+                    bestFrame = f;
+                    break;
+                }
+            } catch (e) { }
         }
-
-        fs.writeFileSync(path.resolve('frames_debug.txt'), debugLog);
 
         if (!bestFrame) {
             throw new Error('Could not identify a match data frame. Check if you are on the Correct Score/Match page.');
