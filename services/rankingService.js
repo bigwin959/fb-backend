@@ -1,6 +1,6 @@
 import puppeteer from 'puppeteer';
 
-import { TEAM_COUNTRY_MAP } from '../../constants.js'; // Adjust path as needed
+import { TEAM_COUNTRY_MAP } from '../constants.js'; // Adjust path as needed
 
 /**
  * FotMob League Metadata – includes domestic leagues and UEFA competitions.
